@@ -17,33 +17,38 @@ const client = new MongoClient(mongoURL, {
   useUnifiedTopology: true,
 });
 
+app.use(express.static("public")); // Serve static files from the 'public' directory
+
 app.get("/", (req, res) => {
   res.sendFile(__dirname + "/index.html");
+});
+
+// Add route handler to handle setting the username through POST request
+app.post("/setUsername", express.json(), (req, res) => {
+  const userName = req.body.userName;
+  res.json({ success: true, userName: userName });
+
+  // Now you can use the userName as needed, for example, broadcasting it to other users
+  io.emit("chat message", {
+    user: "System",
+    message: `${userName} has joined the chat`,
+  });
+
+  // Insert the user's registration message into MongoDB
+  client.connect((err) => {
+    if (err) throw err;
+    const db = client.db(dbName);
+    const messagesCollection = db.collection("messages");
+    messagesCollection.insertOne({
+      user: "System",
+      message: `${userName} has joined the chat`,
+    });
+  });
 });
 
 // Handle socket connections
 io.on("connection", (socket) => {
   console.log("a user connected");
-
-  // Prompt for user's name
-  socket.on("new user", (userName) => {
-    socket.userName = userName;
-    io.emit("chat message", {
-      user: "System",
-      message: `${userName} has joined the chat`,
-    });
-
-    // Insert a system message into MongoDB
-    client.connect((err) => {
-      if (err) throw err;
-      const db = client.db(dbName);
-      const messagesCollection = db.collection("messages");
-      messagesCollection.insertOne({
-        user: "System",
-        message: `${userName} has joined the chat`,
-      });
-    });
-  });
 
   // Listen for chat messages
   socket.on("chat message", (data) => {
